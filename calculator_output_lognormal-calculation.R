@@ -1,5 +1,4 @@
 # Script calculating energy deprivation
-
 log_info("DLE calculator: all variables have been prepared and projected, combining data now.")
 
 # load data
