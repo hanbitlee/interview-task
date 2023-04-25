@@ -50,5 +50,4 @@ scenario.assessment.calculated <- scenario.assessment.data %>%
   select(-sig, -nu)
 
 
-
 log_info(paste0("DLE calculator is done. Now the data should be saved in CSV and/or RData format."))

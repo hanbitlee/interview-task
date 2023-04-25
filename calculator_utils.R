@@ -113,15 +113,15 @@ add_shape_mapping_gini <- function(df, default = "NA") {
 
 
 # Decent Living Calculator utils: preparing input data -------
+
 rename_remind_scenarios <- function(df){
-
+  
   df <- df %>%
-    mutate_cond(startsWith(scenario, "SusDev_"), scenario = substr(scenario,8,nchar(scenario))) %>%
-    mutate_cond(endsWith(scenario, "-PkBudg650"), scenario = paste0(substr(scenario, 1, nchar(scenario)-10), "-1p5C"))
-
+    mutate(scenario = ifelse(startsWith(scenario, "SusDev_"), substr(scenario,8,nchar(scenario)), scenario)) %>%
+    mutate(scenario = ifelse(endsWith(scenario, "-PkBudg650"), paste0(substr(scenario, 1, nchar(scenario)-10), "-1p5C"), scenario))
+  
   return(df)
 }
-
 
 format_final_energy_downscaled_cdlinksmessage <- function(df, include.aggregation.check = IAM.SCENARIO.DATA.AGGREGATION.CHECK) {
   df.out.temp <- df %>%
@@ -295,28 +295,32 @@ format_final_energy_downscaled_shape <- function(df) {
 }
 
 load_iam_region_mappings <- function() {
-  # TODO: rewrite to function with return-only, instead of global variables
-
+  
+  regions_list <- list()
+  
   if (exists("MESSAGE.REGION.MAPPING")) {
     f.regions.message <- here("data-raw", "iam_regions", MESSAGE.REGION.MAPPING)
-    regions.message <<- vroom(f.regions.message) %>%
+    regions_list$regions.message <- vroom(f.regions.message) %>%
       select(iso, region.message) %>%
       mutate(iso = ifelse(iso == "ROM", "ROU", iso)) # Typo fix for Romania
   }
   if (exists("IMAGE.REGION.MAPPING")) {
     f.regions.image <- here("data-raw", "iam_regions", IMAGE.REGION.MAPPING)
-    regions.image <<- vroom(f.regions.image) %>% select(iso, region.image)
+    regions_list$regions.image <- vroom(f.regions.image) %>% select(iso, region.image)
   }
   if (exists("REMIND.REGION.MAPPING")) {
     f.regions.remind <- here("data-raw", "iam_regions", REMIND.REGION.MAPPING)
-    regions.remind <<- vroom(f.regions.remind) %>% select(iso, region.remind)
+    regions_list$regions.remind <- vroom(f.regions.remind) %>% select(iso, region.remind)
   }
   if (exists("MESSAGE.REGION.MAPPING") & exists("IMAGE.REGION.MAPPING") & exists("REMIND.REGION.MAPPING")) {
-    regions <<- regions.message %>%
-      left_join(regions.image) %>%
-      left_join(regions.remind)
+    regions_list$regions <- regions_list$regions.message %>%
+      left_join(regions_list$regions.image) %>%
+      left_join(regions_list$regions.remind)
   }
+  
+  return(regions_list)
 }
+region_mappings <- load_iam_region_mappings()
 
 load_population_projection <- function(ssp) {
   if (is.vector(ssp) & length(ssp) > 1) {
@@ -1203,11 +1207,39 @@ get_gini <- function(df, var = "fe") { # input on per capita variable
   return(gini %>% select(iso, gini))
 }
 
-
 # calculate weibull distribution parameters
 # TODO
+library(MASS)
 
+estimate_weibull_parameters <- function(df) {
+  # Extract the Gini coefficient column from the data frame
+  gini_values <- df$gini
+  
+  # Define the log-likelihood function for the Weibull distribution
+  log_likelihood <- function(params) {
+    k <- params[1]
+    lambda <- params[2]
+    n <- length(gini_values)
+    
+    log_likelihood_value <- n * log(k) - n * k * log(lambda) + (k - 1) * sum(log(gini_values)) - sum((gini_values / lambda)^k)
+    return(-log_likelihood_value)  # Negate the log-likelihood for minimization
+  }
+  
+  # Estimate the Weibull distribution parameters using MLE
+  initial_guess <- c(1, 1)  # Initial guess for the shape (k) and scale (lambda) parameters
+  mle_params <- optim(initial_guess, log_likelihood, method = "L-BFGS-B", lower = c(0, 0))
+  
+  # Extract the estimated shape (k) and scale (lambda) parameters
+  k_estimated <- mle_params$par[1]
+  lambda_estimated <- mle_params$par[2]
+  
+  return(list(shape = k_estimated, scale = lambda_estimated))
+}
 
 
 # project using deciles (or any number of percentiles?)
-# TODO
+estimate_weibull_parameters <- function(df) {
+  gini_values <- df$gini
+  gini_deciles <- quantile(gini_values, probs = seq(0, 1, by = 0.1))
+}
+
