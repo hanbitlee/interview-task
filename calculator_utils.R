@@ -117,9 +117,8 @@ add_shape_mapping_gini <- function(df, default = "NA") {
 rename_remind_scenarios <- function(df){
   
   df <- df %>%
-    mutate(scenario = ifelse(startsWith(scenario, "SusDev_"), substr(scenario,8,nchar(scenario)), scenario)) %>%
-    mutate(scenario = ifelse(endsWith(scenario, "-PkBudg650"), paste0(substr(scenario, 1, nchar(scenario)-10), "-1p5C"), scenario))
-  
+    mutate(scenario = if_else(startsWith(scenario, "SusDev_"), substr(scenario,8,nchar(scenario)), scenario)) %>%
+    mutate(scenario = if_else(endsWith(scenario, "-PkBudg650"), paste0(substr(scenario, 1, nchar(scenario)-10), "-1p5C"), scenario))
   return(df)
 }
 
@@ -1209,37 +1208,6 @@ get_gini <- function(df, var = "fe") { # input on per capita variable
 
 # calculate weibull distribution parameters
 # TODO
-library(MASS)
-
-estimate_weibull_parameters <- function(df) {
-  # Extract the Gini coefficient column from the data frame
-  gini_values <- df$gini
-  
-  # Define the log-likelihood function for the Weibull distribution
-  log_likelihood <- function(params) {
-    k <- params[1]
-    lambda <- params[2]
-    n <- length(gini_values)
-    
-    log_likelihood_value <- n * log(k) - n * k * log(lambda) + (k - 1) * sum(log(gini_values)) - sum((gini_values / lambda)^k)
-    return(-log_likelihood_value)  # Negate the log-likelihood for minimization
-  }
-  
-  # Estimate the Weibull distribution parameters using MLE
-  initial_guess <- c(1, 1)  # Initial guess for the shape (k) and scale (lambda) parameters
-  mle_params <- optim(initial_guess, log_likelihood, method = "L-BFGS-B", lower = c(0, 0))
-  
-  # Extract the estimated shape (k) and scale (lambda) parameters
-  k_estimated <- mle_params$par[1]
-  lambda_estimated <- mle_params$par[2]
-  
-  return(list(shape = k_estimated, scale = lambda_estimated))
-}
 
 
 # project using deciles (or any number of percentiles?)
-estimate_weibull_parameters <- function(df) {
-  gini_values <- df$gini
-  gini_deciles <- quantile(gini_values, probs = seq(0, 1, by = 0.1))
-}
-
